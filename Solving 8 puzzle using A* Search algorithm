@@ -1,0 +1,135 @@
+import heapq
+
+def is_solvable(puzzle):
+    """Check if the puzzle is solvable based on inversion count."""
+    flattened = [tile for row in puzzle for tile in row if tile != '_']
+    inversions = 0
+    for i in range(len(flattened)):
+        for j in range(i + 1, len(flattened)):
+            if flattened[i] > flattened[j]:
+                inversions += 1
+    return inversions % 2 == 0
+
+def manhattan_distance(puzzle, goal):
+    """Calculate Manhattan distance heuristic."""
+    distance = 0
+    size = len(puzzle)
+    goal_positions = {}
+
+    # Record positions of tiles in the goal state
+    for i in range(size):
+        for j in range(size):
+            if goal[i][j] != '_':
+                goal_positions[goal[i][j]] = (i, j)
+
+    for i in range(size):
+        for j in range(size):
+            if puzzle[i][j] != '_' and puzzle[i][j] in goal_positions:
+                goal_x, goal_y = goal_positions[puzzle[i][j]]
+                distance += abs(i - goal_x) + abs(j - goal_y)
+
+    return distance
+
+class Node:
+    def __init__(self, data, level, fval):
+        self.data = data
+        self.level = level  # g(n): cost to reach this node
+        self.fval = fval    # f(n): total cost (g(n) + h(n))
+        self.parent = None  # To trace back the solution path
+
+    def __lt__(self, other):
+        return self.fval < other.fval
+
+    def generate_children(self):
+        """Generate child nodes by sliding the blank tile."""
+        x, y = self.find_blank()
+        directions = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
+        children = []
+
+        for new_x, new_y in directions:
+            if 0 <= new_x < len(self.data) and 0 <= new_y < len(self.data):
+                child_data = self.swap(self.data, x, y, new_x, new_y)
+                child_node = Node(child_data, self.level + 1, 0)
+                child_node.parent = self
+                children.append(child_node)
+
+        return children
+
+    def find_blank(self):
+        """Find the blank tile ('_')."""
+        for i, row in enumerate(self.data):
+            for j, val in enumerate(row):
+                if val == '_':
+                    return i, j
+
+    def swap(self, puzzle, x1, y1, x2, y2):
+        """Swap blank tile with the target position."""
+        puzzle_copy = [list(row) for row in puzzle]
+        puzzle_copy[x1][y1], puzzle_copy[x2][y2] = puzzle_copy[x2][y2], puzzle_copy[x1][y1]
+        return tuple(tuple(row) for row in puzzle_copy)
+
+def solve_puzzle(start, goal):
+    """Solve the 8-puzzle problem using A* algorithm."""
+    if not is_solvable(start):
+        return "Puzzle is unsolvable."
+
+    open_list = []
+    closed_set = set()
+
+    start_node = Node(start, 0, 0)
+    start_node.fval = manhattan_distance(start, goal)  # f(n) = h(n) since g(n) = 0 initially
+    heapq.heappush(open_list, start_node)
+
+    while open_list:
+        current_node = heapq.heappop(open_list)
+
+        # Check if the goal is reached
+        if current_node.data == goal:
+            return reconstruct_path(current_node), current_node.level
+
+        closed_set.add(current_node.data)
+
+        for child in current_node.generate_children():
+            if child.data not in closed_set:
+                child.fval = child.level + manhattan_distance(child.data, goal)
+                heapq.heappush(open_list, child)
+
+    return "No solution found."
+
+def reconstruct_path(node):
+    """Trace back from the goal node to the start node."""
+    path = []
+    while node:
+        path.append(node.data)
+        node = node.parent
+    return path[::-1]
+
+# Example usage
+if __name__ == "__main__":
+    print("Enter the start state (3x3 matrix with '_' for blank space):")
+    start_state = []
+    for _ in range(3):
+        row = input().strip().split()
+        start_state.append(tuple(row))
+    start_state = tuple(start_state)
+
+    goal_state = (
+    ('1', '2', '3'),
+    ('4', '5', '6'),
+    ('7', '8', '_')
+)
+
+    solution = solve_puzzle(start_state, goal_state)
+
+    if isinstance(solution, str):
+        print(solution)
+    else:
+        path, moves = solution
+        print("\n\n")
+        print("Solution Path:")
+        for step in path:
+            for row in step:
+                print(" ".join(str(x) for x in row))
+            print("=============================================")
+            print("")
+        print(f"Number of moves required: {moves}")
